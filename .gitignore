@@ -20,14 +20,20 @@
 *.data
 *.json
 *.cfg
+!setup.cfg
 !cfg/yolov3*.cfg
 
 storage.googleapis.com
 runs/*
 data/*
-!data/hyps/*
+data/images/*
+!data/*.yaml
+!data/hyps
+!data/scripts
+!data/images
 !data/images/zidane.jpg
 !data/images/bus.jpg
+!data/images/sino-nom-test.jpg
 !data/*.sh
 
 results*.csv
@@ -36,6 +42,7 @@ results*.csv
 coco/
 coco128/
 VOC/
+wb_localization_dataset/
 
 # MATLAB GitIgnore -----------------------------------------------------------------------------------------------------
 *.m~
@@ -45,9 +52,18 @@ VOC/
 # Neural Network weights -----------------------------------------------------------------------------------------------
 *.weights
 *.pt
+*.pb
 *.onnx
+*.engine
 *.mlmodel
+*.mlpackage
 *.torchscript
+*.tflite
+*.h5
+*_saved_model/
+*_web_model/
+*_openvino_model/
+*_paddle_model/
 darknet53.conv.74
 yolov3-tiny.conv.15
 
@@ -76,7 +92,7 @@ sdist/
 var/
 wheels/
 *.egg-info/
-wandb/
+/wandb/
 .installed.cfg
 *.egg
 
