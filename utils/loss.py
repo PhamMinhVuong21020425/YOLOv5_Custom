@@ -10,19 +10,26 @@ from utils.metrics import bbox_iou
 from utils.torch_utils import de_parallel
 
 
-def smooth_BCE(eps=0.1):  # https://github.com/ultralytics/yolov3/issues/238#issuecomment-598028441
-    # return positive, negative label smoothing BCE targets
+def smooth_BCE(eps=0.1):
+    """Returns label smoothing BCE targets for reducing overfitting; pos: `1.0 - 0.5*eps`, neg: `0.5*eps`. For details see https://github.com/ultralytics/yolov3/issues/238#issuecomment-598028441."""
     return 1.0 - 0.5 * eps, 0.5 * eps
 
 
 class BCEBlurWithLogitsLoss(nn.Module):
-    # BCEwithLogitLoss() with reduced missing label effects.
+    """Modified BCEWithLogitsLoss to reduce missing label effects in YOLOv5 training with optional alpha smoothing."""
+
     def __init__(self, alpha=0.05):
-        super(BCEBlurWithLogitsLoss, self).__init__()
-        self.loss_fcn = nn.BCEWithLogitsLoss(reduction='none')  # must be nn.BCEWithLogitsLoss()
+        """Initializes a modified BCEWithLogitsLoss with reduced missing label effects, taking optional alpha smoothing
+        parameter.
+        """
+        super().__init__()
+        self.loss_fcn = nn.BCEWithLogitsLoss(reduction="none")  # must be nn.BCEWithLogitsLoss()
         self.alpha = alpha
 
     def forward(self, pred, true):
+        """Computes modified BCE loss for YOLOv5 with reduced missing label effects, taking pred and true tensors,
+        returns mean loss.
+        """
         loss = self.loss_fcn(pred, true)
         pred = torch.sigmoid(pred)  # prob from logits
         dx = pred - true  # reduce only missing label effects
@@ -33,16 +40,21 @@ class BCEBlurWithLogitsLoss(nn.Module):
 
 
 class FocalLoss(nn.Module):
-    # Wraps focal loss around existing loss_fcn(), i.e. criteria = FocalLoss(nn.BCEWithLogitsLoss(), gamma=1.5)
+    """Applies focal loss to address class imbalance by modifying BCEWithLogitsLoss with gamma and alpha parameters."""
+
     def __init__(self, loss_fcn, gamma=1.5, alpha=0.25):
-        super(FocalLoss, self).__init__()
+        """Initializes FocalLoss with specified loss function, gamma, and alpha values; modifies loss reduction to
+        'none'.
+        """
+        super().__init__()
         self.loss_fcn = loss_fcn  # must be nn.BCEWithLogitsLoss()
         self.gamma = gamma
         self.alpha = alpha
         self.reduction = loss_fcn.reduction
-        self.loss_fcn.reduction = 'none'  # required to apply FL to each element
+        self.loss_fcn.reduction = "none"  # required to apply FL to each element
 
     def forward(self, pred, true):
+        """Calculates the focal loss between predicted and true labels using a modified BCEWithLogitsLoss."""
         loss = self.loss_fcn(pred, true)
         # p_t = torch.exp(-loss)
         # loss *= self.alpha * (1.000001 - p_t) ** self.gamma  # non-zero power for gradient stability
@@ -54,25 +66,30 @@ class FocalLoss(nn.Module):
         modulating_factor = (1.0 - p_t) ** self.gamma
         loss *= alpha_factor * modulating_factor
 
-        if self.reduction == 'mean':
+        if self.reduction == "mean":
             return loss.mean()
-        elif self.reduction == 'sum':
+        elif self.reduction == "sum":
             return loss.sum()
         else:  # 'none'
             return loss
 
 
 class QFocalLoss(nn.Module):
-    # Wraps Quality focal loss around existing loss_fcn(), i.e. criteria = FocalLoss(nn.BCEWithLogitsLoss(), gamma=1.5)
+    """Implements Quality Focal Loss to address class imbalance by modulating loss based on prediction confidence."""
+
     def __init__(self, loss_fcn, gamma=1.5, alpha=0.25):
-        super(QFocalLoss, self).__init__()
+        """Initializes Quality Focal Loss with given loss function, gamma, alpha; modifies reduction to 'none'."""
+        super().__init__()
         self.loss_fcn = loss_fcn  # must be nn.BCEWithLogitsLoss()
         self.gamma = gamma
         self.alpha = alpha
         self.reduction = loss_fcn.reduction
-        self.loss_fcn.reduction = 'none'  # required to apply FL to each element
+        self.loss_fcn.reduction = "none"  # required to apply FL to each element
 
     def forward(self, pred, true):
+        """Computes the focal loss between `pred` and `true` using BCEWithLogitsLoss, adjusting for imbalance with
+        `gamma` and `alpha`.
+        """
         loss = self.loss_fcn(pred, true)
 
         pred_prob = torch.sigmoid(pred)  # prob from logits
@@ -80,9 +97,9 @@ class QFocalLoss(nn.Module):
         modulating_factor = torch.abs(true - pred_prob) ** self.gamma
         loss *= alpha_factor * modulating_factor
 
-        if self.reduction == 'mean':
+        if self.reduction == "mean":
             return loss.mean()
-        elif self.reduction == 'sum':
+        elif self.reduction == "sum":
             return loss.sum()
         else:  # 'none'
             return loss

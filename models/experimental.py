@@ -85,19 +85,27 @@ class Ensemble(nn.ModuleList):
         return y, None  # inference, train output
 
 
-def attempt_load(weights, map_location=None, inplace=True):
+def attempt_load(weights, map_location=None, inplace=True, fuse=True):
     from models.yolo import Detect, Model
 
     # Loads an ensemble of models weights=[a,b,c] or a single model weights=[a] or weights=a
     model = Ensemble()
     for w in weights if isinstance(weights, list) else [weights]:
         ckpt = torch.load(attempt_download(w), map_location=map_location)  # load
-        model.append(ckpt['ema' if ckpt.get('ema') else 'model'].float().fuse().eval())  # FP32 model
+        if fuse:
+            model.append(ckpt['ema' if ckpt.get('ema') else 'model'].float().fuse().eval())  # FP32 model
+        else:
+            model.append(ckpt['ema' if ckpt.get('ema') else 'model'].float().eval())  # without layer fuse
+
 
     # Compatibility updates
     for m in model.modules():
         if type(m) in [nn.Hardswish, nn.LeakyReLU, nn.ReLU, nn.ReLU6, nn.SiLU, Detect, Model]:
             m.inplace = inplace  # pytorch 1.7.0 compatibility
+            if type(m) is Detect:
+                if not isinstance(m.anchor_grid, list):  # new Detect Layer compatibility
+                    delattr(m, 'anchor_grid')
+                    setattr(m, 'anchor_grid', [torch.zeros(1)] * m.nl)
         elif type(m) is Conv:
             m._non_persistent_buffers_set = set()  # pytorch 1.6.0 compatibility
 
